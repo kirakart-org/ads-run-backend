@@ -34,19 +34,12 @@ app = FastAPI(
 # Configure FRONTEND_ORIGINS in your environment.
 # =========================================================
 
-allowed_origins = [
-    origin.strip()
-    for origin in os.getenv(
-        "FRONTEND_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,https://ads.kirakart.com/",
-        
-    ).split(",")
-    if origin.strip()
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=[
+        "https://ads.kirakart.com",
+        "http://localhost:5173",
+    ],
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
