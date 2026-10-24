@@ -183,6 +183,79 @@ class AdEnquiry(BaseModel):
 # ROOT / HEALTH CHECK
 # =========================================================
 
+
+import os
+import smtplib
+import logging
+from email.message import EmailMessage
+from dotenv import load_dotenv
+
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+
+def send_enquiry_notification(enquiry: dict) -> None:
+    """Email the business owner when a new enquiry is submitted."""
+
+    sender = os.getenv("SMTP_EMAIL")
+    app_password = os.getenv("SMTP_APP_PASSWORD")
+    recipient = os.getenv(
+        "NOTIFICATION_EMAIL",
+        "kirakartsupport@gmail.com"
+    )
+
+    if not sender or not app_password:
+        logger.error("Email notification credentials are missing.")
+        return
+
+    msg = EmailMessage()
+    msg["Subject"] = (
+        f"New AI UGC Ad Enquiry — {enquiry['brand_name']}"
+    )
+    msg["From"] = sender
+    msg["To"] = recipient
+
+    msg.set_content(f"""
+You have received a new enquiry through your Kirakart AI UGC Ads website.
+
+CONTACT DETAILS
+---------------
+Name: {enquiry['name']}
+Email: {enquiry['business_email']}
+Brand: {enquiry['brand_name']}
+Product URL: {enquiry.get('product_url') or 'Not provided'}
+
+PROJECT DETAILS
+---------------
+Category: {enquiry['product_category']}
+Package: {enquiry.get('selected_package', 'not_sure')}
+Budget: {enquiry['approximate_budget']}
+Number of videos: {enquiry.get('desired_video_count') or 'Not specified'}
+
+Project brief:
+{enquiry['project_details']}
+
+Please follow up with this potential client.
+""".strip())
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(sender, app_password)
+            smtp.send_message(msg)
+
+        logger.info(
+            "Enquiry notification email sent for brand %s",
+            enquiry["brand_name"]
+        )
+
+    except Exception:
+        # Do not log passwords or SMTP credentials.
+        logger.exception("Failed to send enquiry notification email.")
+
+
+
 @app.get("/")
 def root():
     return {
@@ -358,9 +431,15 @@ def early_access(data: EarlyAccess):
 # KIRAKART ADS: CREATE ENQUIRY
 # Requires public.ad_enquiries table.
 # =========================================================
+from fastapi import BackgroundTasks
+
+
 
 @app.post("/ad-enquiries", status_code=201)
-def create_ad_enquiry(data: AdEnquiry):
+def create_ad_enquiry(
+    data: AdEnquiry,
+    background_tasks: BackgroundTasks
+):
     conn = None
     cur = None
 
@@ -399,6 +478,14 @@ def create_ad_enquiry(data: AdEnquiry):
 
         record = cur.fetchone()
         conn.commit()
+
+        # Schedule the email notification after the insert succeeds.
+        enquiry_data = data.model_dump(mode="json")
+
+        background_tasks.add_task(
+            send_enquiry_notification,
+            enquiry_data
+        )
 
         return {
             "success": True,
