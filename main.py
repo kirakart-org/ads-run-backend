@@ -234,7 +234,7 @@ Please follow up with this potential client.
 """.strip())
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as smtp:
+        with smtplib.SMTP("smtp.gmail.com", 2525, timeout=15) as smtp:
             smtp.starttls()
             smtp.login(sender, app_password)
             smtp.send_message(msg)
